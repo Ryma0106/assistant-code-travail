@@ -9,7 +9,11 @@ import json
 import os
 import chromadb
 from sentence_transformers import SentenceTransformer
-from donnees_test import corpus_test  # à remplacer plus tard par le vrai corpus de Ryma
+from constants import CORPUS_PATH
+
+# --- Chargement du corpus réel (jalon 1, produit par Ryma) ---
+with open(CORPUS_PATH, encoding="utf-8") as f:
+    corpus_test = json.load(f)
 
 # --- Configuration ---
 NOM_MODELE_EMBEDDING = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -54,12 +58,12 @@ def preparer_chunks(corpus):
     """
     chunks = []
     for doc in corpus:
-        texte_enrichi = f"{doc['section_thematique']} — Article {doc['numero_article']} : {doc['texte']}"
+        texte_enrichi = f"{doc['titre_section']} — Article {doc['numero_article']} : {doc['texte']}"
         chunks.append({
             "id": doc["id"],
             "texte_embedde": texte_enrichi,
             "numero_article": doc["numero_article"],
-            "section_thematique": doc["section_thematique"],
+            "section_thematique": doc["titre_section"],
             "source": doc["source"],
         })
     return chunks
@@ -91,23 +95,30 @@ def construire_index():
     modele = SentenceTransformer(NOM_MODELE_EMBEDDING)
 
     textes = [c["texte_embedde"] for c in chunks]
-    print("Encodage des chunks en vecteurs...")
-    embeddings = modele.encode(textes).tolist()
+    print(f"Encodage de {len(textes)} chunks en vecteurs...")
+    embeddings = modele.encode(textes, show_progress_bar=True).tolist()
 
     collection = client.create_collection(name=NOM_COLLECTION)
-    collection.add(
-        ids=[c["id"] for c in chunks],
-        documents=textes,
-        embeddings=embeddings,
-        metadatas=[
-            {
-                "numero_article": c["numero_article"],
-                "section_thematique": c["section_thematique"],
-                "source": c["source"],
-            }
-            for c in chunks
-        ],
-    )
+
+    # ChromaDB limite la taille des lots d'insertion : on insère par paquets de 500
+    TAILLE_LOT = 500
+    for i in range(0, len(chunks), TAILLE_LOT):
+        lot_chunks = chunks[i:i + TAILLE_LOT]
+        lot_textes = textes[i:i + TAILLE_LOT]
+        lot_embeddings = embeddings[i:i + TAILLE_LOT]
+        collection.add(
+            ids=[c["id"] for c in lot_chunks],
+            documents=lot_textes,
+            embeddings=lot_embeddings,
+            metadatas=[
+                {
+                    "numero_article": c["numero_article"],
+                    "section_thematique": c["section_thematique"],
+                    "source": c["source"],
+                }
+                for c in lot_chunks
+            ],
+        )
 
     sauvegarder_metadata(hash_actuel)
     print(f"Indexation terminée : {collection.count()} documents indexés.")
@@ -118,8 +129,8 @@ if __name__ == "__main__":
     collection = construire_index()
 
     # Contrôle qualité : afficher quelques chunks avec leurs métadonnées
-    print("\n--- Contrôle qualité : aperçu des chunks indexés ---")
-    resultat = collection.get(limit=3, include=["documents", "metadatas"])
+    print("\n--- Contrôle qualité : aperçu de 5 chunks au hasard ---")
+    resultat = collection.get(limit=5, include=["documents", "metadatas"])
     for doc, meta in zip(resultat["documents"], resultat["metadatas"]):
         print(f"\nArticle {meta['numero_article']} ({meta['section_thematique']})")
         print(f"Texte : {doc}")
