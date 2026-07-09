@@ -3,3 +3,6 @@ chromadb
 groq
 python-dotenv
 requests
+rich
+streamlit
+torchvision
