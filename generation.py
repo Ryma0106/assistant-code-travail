@@ -81,9 +81,15 @@ def generer_reponse(question, top_k=TOP_K_CHUNKS):
 
 
 if __name__ == "__main__":
-    question_test = "Quelle est la durée légale du travail par semaine ?"
-    resultat = generer_reponse(question_test)
+    questions_a_tester = [
+        "Combien de jours de congés payés par mois de travail ?",
+        "Qu'est-ce que le harcèlement moral au travail ?",
+        "Quel est le délai de préavis en cas de licenciement ?",
+    ]
 
-    print(f"Question : {question_test}\n")
-    print(f"Réponse :\n{resultat['reponse']}\n")
-    print(f"Articles sources utilisés : {resultat['articles_sources']}")
+    for question_test in questions_a_tester:
+        resultat = generer_reponse(question_test)
+        print(f"Question : {question_test}\n")
+        print(f"Réponse :\n{resultat['reponse']}\n")
+        print(f"Articles sources utilisés : {resultat['articles_sources']}")
+        print("=" * 70)
